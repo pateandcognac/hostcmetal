@@ -1,0 +1,144 @@
+Summary.
+
+This is an implementation of the "hostcm" protocol, a method of
+using the built-in firmware of the Commodore SuperPET to communicate with
+a host computer.
+
+See http://seefigure1.com/resources/hostcm/index.html for more background.
+
+Installation and usage.
+
+1. Compile the server software. On a POSIX compliant system (e.g.
+Mac OS X), 'make' should just work. You may have to adjust the 
+CFLAGS for your compiler and environment.
+
+2. Connect the SuperPET to the host computer's serial port (using
+a NULL modem cable).
+
+3. Use the Host Setup menu item on the SuperPET to set appropriate 
+communication parameters (I use 9600 baud, EVEN parity, 1 stop bit). 
+Leave the remainder of the settings untouched. (Note that the settings 
+on the SuperPET are not preserved across reboots).
+
+4. Use the "passthrough" ('p' command) feature of the SuperPET's
+6809 monitor to make sure that you can send and receive characters
+at both ends of the serial link. 
+
+[Some USB-to-RS232 dongle/driver combinations don't generate DTR by default, 
+and the SuperPET serial implementation is sufficiently standards-compliant 
+that this confuses it.  If you have a system which supports the non-POSIX 
+termios ioctls TIOCSDTR or TIOCMSET, defining UNIX_LIKE in the Makefile will 
+solve this problem in software; otherwise you may have to tie the DTR signal by 
+hacking at the serial cable itself.]
+
+[For all manner of RS232 wiring information, see
+http://www.columbia.edu/kermit/cable.html].
+
+5. There are two ways of using hostcm. Originally, users would log into 
+the host using the "passthrough" (p) command in the monitor, and then invoke 
+hostcm directly. To use it in this manner, the host must be configured to
+allow logins over the serial line; since the serial line is already set properly
+to allow communication, hostcm itself is used without any 
+arguments.
+
+	hostcm
+
+Once the program is running, return from the passthrough command by
+pressing the "run/stop" key, and continue as normal.
+
+To end hostcm use in this mode, return to passthrough, type 'q' followed by
+return, and hostcm will exit.
+
+6. Alternatively, hostcm may be run from the host independently. 
+To do this, invoke the hostcm program with the appropriate arguments to 
+configure the serial line. 
+
+	hostcm [-b][-p (even|odd)][-s baudrate] ttyname
+
+where
+	-b 	2 stop bits (default 1)
+	-p	parity (default odd)
+	-s	baudrate (default 9600)
+ 	ttyname name of tty device
+
+The server will run until interrupted, and will exit with -1 as a
+status in the case of an unrecoverable error.
+
+6. If everything has worked correctly to this point, start the SuperPET editor and try
+
+	di host./
+
+You should get a directory listing of the root directory of the server.
+
+Other file operations in the editor (such as 'get' and 'put') should
+now work on the host as well.
+
+Notes and limitations.
+
+* For a general review of how hostcm was originally used, have a look at 
+
+http://archive.6502.org/publications/superpet_gazette/superpet_gazette_v1_n08_jun_jul_1983.pdf
+(pages 102-103).
+
+* You can copy files in the editor using the "copy" command -- and
+this will allow the upload and download of program files using hostcm, eg.
+
+	copy (v)host.BASIC,PRG disk/0.BASIC,PRG
+
+Note the '(v)' preceding the 'host' device specification. This tells
+the SuperPET that the file is a non-text, variable record length
+file, and the protocol encodes the transfer so as to preserve the
+binary data.  For more details about file specifications and naming,
+have a look at Chapter 5 of the System Overview.
+
+* You can load a program from the host directly at the SuperPET 
+6809-mode menu screen:
+
+	host.<path_to_program>
+
+will do it. This is particularly useful if you don't have a disk drive.
+
+* Waterloo MicroPIP is the best way I've found to do file transfer and 
+other disk operations in SuperPET 6809 mode. It's minimally documented, but 
+you can find some notes on its operation here: 
+
+http://archive.6502.org/publications/superpet_gazette/superpet_gazette_v1_n09_aug_sep_1983.pdf
+(page 129)
+
+MicroPIP can be found as part of disk image here: 
+
+http://mikenaberezny.com/wp-content/uploads/2012/02/piphelp.d80
+
+I've extracted MicroPIP as a standalone file for easy use with hostcm, and that can
+be found here:
+
+http://seefigure1.com/resources/hostcm/micropip.zip
+
+* The hostcm protocol presumes a 7 bit data path; thus, all binary 
+transfers are encoded in ASCII. The scheme that hostcm uses is particularly 
+inefficient, and inflates the data by a factor of 2. Moving large binary 
+files and loading remote programs will not be fast.  Be patient.
+
+* The ROM rename command doesn't allow renames across devices, and so
+the second argument to the command does not recognize a device
+identifier prefix -- it is presumed to be the same as the first. You'll see 
+this behaviour in any SuperPET program which uses these ROM
+routines, e.g. MicroEditor, MicroPIP.
+
+* Like the SuperPET ROMs/file system, hostcm supports fixed record length files.
+The host-side support for this hasn't been tested much; caveat emptor.
+
+* This is a reverse engineering effort, and there may be corner cases
+and other subtleties that are broken. Compiling with -DDEBUG will
+allow you to trace the details of the communications between the
+two machines. Please let me know about any problems or difficulties
+you might have, and include a DEBUG trace with your report.
+
+* This program is copyright, and licensed under the BSD licence 
+(see http://opensource.org/licenses/BSD-2-Clause). 
+
+Thanks and have fun.
+
+Rob Ferguson
+rob@bitscience.ca
+July 10, 2013

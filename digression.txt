@@ -1,0 +1,125 @@
+A digression on SuperPET files and HOSTCM
+
+On the 6809 side of the SuperPET, file names are of the form 
+
+	[(type[:record-length])][device.]file-designator[,file-format]
+
+Files can have a "type" and a "format" (which is different than the
+open "format" passed to the hostopen routine). The type is a passed
+to hostcm explicitly; file format is specified by the file extension,
+delimited by a ',' from the 'file-designator' (or filename). Files
+that lack a file extension are presumed to be "seq" file format.
+
+Types:
+
+	Text: a printable bytestream, with variable length records 
+	that are delimited by '\d'
+
+	Variable: a bytestream with variable length records. The 
+	SuperPET manual claims that "variable files have two extra 
+	characters inserted at the start of each record to contain 
+	the length of the record." However, see below.
+
+	Fixed: a bytestream with fixed length records; native on-disk 
+	format stores the reord length in the directory entry. 
+	Default RL is 80.
+
+File Formats:
+
+	seq: data is stored in compact fashion that doesn't allow 
+	record-level seeking.  data must be read sequentially.
+
+	rel: data is stored to allow record level seeking. 
+	Conceptually, this includes both variable and fixed record 
+	length files, although I am unsure if variable rel files 
+	are actually supported.
+
+	prg: data is stored to be loaded as an executable program
+
+There are a variety of other "Commodore" file formats that are not
+explicitly supported by the Waterloo ROMs ('usr', 'cbm', 'dir').
+We pass all unknown formats through unchanged, treating them as
+'seq'.
+
+If supplied, the file-designator and format are left untouched.  If
+there's a file designator but no format, the "seq" format is presumed.
+
+[For load and store operations, "prg" is assumed.]
+
+
+Note 1: variable record length files are weird. 
+
+First, the SuperPET manual says "Each of the three file types (text,
+fixed, variable) may be used in either file format (seq or rel)".
+However, there's no way to represent variable record lengths in the
+on-disk "side-sector" format, so you'll have to read the entire
+file to find a particular record -- thus making the entire idea of
+variable record "rel" files sort of pointless.
+
+(see here http://www.jamtronix.com/files/c64_docs/anatomy_of_the_1541_disk_drive.pdf
+for the details of the 1541/8050/8250 file formats)
+
+Second, the SuperPET manual says that extra characters are inserted
+into variable files to indicate the length of each record. However,
+contemporary discussions of the original hostcm note that you can
+do
+
+	copy prof68,prg to (v)host.prof68
+
+and then
+
+	copy (v)host.prof68 to prof68,prg
+
+and get the original program back without extra characters inserted.
+In this example, it's concieveable that the file stored on the host
+has the extra characters inserted, and that they're removed on the
+return.  Practically speaking, however, it'd be more convenient if
+the file on the host was bytewise identical to the file on the
+SuperPET, since this allows prg files extracted from archived disk
+images to work correctly without adding record marks.
+
+For the moment, then, we punt: variable rl files are treated as
+byte streams; the entire contents will be returned as a single
+record. We will fail attempts to seek on a variable rl file.  Will
+change this if it's a problem, but for the moment it will preserve
+the correct copy behaviours.
+
+
+Note 2: fixed record length files are poorly defined, and some
+operations on sparse fixed RL files are broken.
+
+The manual says that the default RL is 80. So if you're creating a
+file, and the RL is unspecified, we set it to 80.
+
+However, what happens when you try to open an existing fixed length
+file with a missing or different record length (RL)? The manual
+doesn't say.
+
+There are a couple of options.
+
+if you provide the RL, but it's different from the existing one
+
+	- You could open it, returning the data with the new 
+		record length
+	- You could open it, returning the data with the 
+		pre-existing record length
+	- You could fail the open
+
+if you don't provide the RL
+
+	- You can use the default RL (80), and fail the open if it 
+		has different existing RL
+	- You can use the existing RL
+
+For simpilicity, we fail the open if the RL's don't match.
+Experimentally, this seems to match the SuperPET behaviour.
+
+Also of note: Waterloo PIP, microEditor, and other standard 6809
+mode software fail to copy sparse fixed files correctly when the
+source is a disk.
+
+The symptom is that the copy will only process the first non-null record. 
+
+However, copies of sparse fixed files *from* the HOST device *to*
+disks work correctly.  (Perhaps the copy routine is stopping when
+the read returns 0, rather than checking EOF.)
